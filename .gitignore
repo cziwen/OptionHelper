@@ -53,4 +53,7 @@ ENV/
 
 # 操作系统
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# 特定数据文件
+8月期权.csv 
