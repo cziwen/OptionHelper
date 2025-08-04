@@ -235,6 +235,8 @@ class OptionsRollAnalyzer:
                 '汇总新盈利平衡价': new_profit_breakeven,
                 '汇总旧亏损平衡价': old_loss_breakeven,
                 '汇总新亏损平衡价': new_loss_breakeven,
+                '旧最大收入': old_profit_breakeven - weighted_avg_cost,
+                '新最大收入': new_profit_breakeven - adjusted_avg_cost,
                 '总合同数量': total_contracts
             })
 
@@ -283,37 +285,38 @@ class OptionsRollAnalyzer:
     
     def plot_roll_analysis(self, save_plot: bool = True, output_dir: str = None) -> None:
         """只保留两个图：
-        1. Roll 前后期权费收入对比
+        1. Roll 前后最大收入对比（盈亏平衡价 - 成本价）
         2. Roll 前后盈亏平衡价格对比（含旧成本和调整后成本）"""
         if self.results is None:
             self.analyze_all_rolls()
 
         summary = self.aggregate_roll_by_stock()
 
-        # ---- 图1: Roll 前后期权费收入对比 ----
+        # ---- 图1: Roll 前后最大收入对比（盈亏平衡价 - 成本价）----
         fig1, ax1 = plt.subplots(figsize=(8, 5))
         x = np.arange(len(summary))
         width = 0.35
 
-        old_prem = summary['旧期权费总收入']
-        new_prem = summary['新期权费总收入']
+        # 计算最大收入：盈亏平衡价 - 成本价
+        old_max_income = summary['汇总旧盈利平衡价'] - summary['加权平均成本价']
+        new_max_income = summary['汇总新盈利平衡价'] - summary['汇总调整后成本价']
 
-        bars_old = ax1.bar(x - width / 2, old_prem, width, label='旧期权费收入')
-        bars_new = ax1.bar(x + width / 2, new_prem, width, label='新期权费收入')
+        bars_old = ax1.bar(x - width / 2, old_max_income, width, label='旧最大收入')
+        bars_new = ax1.bar(x + width / 2, new_max_income, width, label='新最大收入')
 
         ax1.set_xticks(x)
         ax1.set_xticklabels(summary['股票代码'], rotation=45)
-        ax1.set_ylabel('期权费收入')
-        ax1.set_title('Roll 前后期权费收入对比')
+        ax1.set_ylabel('最大收入（盈亏平衡价 - 成本价）')
+        ax1.set_title('Roll 前后最大收入对比')
         ax1.legend()
         ax1.grid(alpha=0.3)
 
         for bar in bars_old:
             h = bar.get_height()
-            ax1.text(bar.get_x() + bar.get_width() / 2, h + max(1, h * 0.01), f'{h:,.0f}', ha='center', va='bottom', fontsize=8)
+            ax1.text(bar.get_x() + bar.get_width() / 2, h + max(1, h * 0.01), f'{h:.2f}', ha='center', va='bottom', fontsize=8)
         for bar in bars_new:
             h = bar.get_height()
-            ax1.text(bar.get_x() + bar.get_width() / 2, h + max(1, h * 0.01), f'{h:,.0f}', ha='center', va='bottom', fontsize=8)
+            ax1.text(bar.get_x() + bar.get_width() / 2, h + max(1, h * 0.01), f'{h:.2f}', ha='center', va='bottom', fontsize=8)
 
         # ---- 图2: Roll 前后盈亏平衡价格对比（含旧成本 & 调整后成本） ----
         fig2, ax2 = plt.subplots(figsize=(10, 6))
@@ -356,7 +359,7 @@ class OptionsRollAnalyzer:
                 output_dir = f"output/{timestamp}"
                 os.makedirs(output_dir, exist_ok=True)
             # 保存两个图
-            fig1_path = os.path.join(output_dir, "期权Roll_期权费收入对比.png")
+            fig1_path = os.path.join(output_dir, "期权Roll_最大收入对比.png")
             fig2_path = os.path.join(output_dir, "期权Roll_盈亏平衡价格对比.png")
             fig1.savefig(fig1_path, dpi=300, bbox_inches='tight')
             fig2.savefig(fig2_path, dpi=300, bbox_inches='tight')
@@ -381,9 +384,6 @@ class OptionsRollAnalyzer:
             print(f"  旧期权费总收入: {row['旧期权费总收入']:,.2f} 元")
             print(f"  新期权费总收入: {row['新期权费总收入']:,.2f} 元")
             print(f"  平仓总成本: {row['平仓总成本']:,.2f} 元")
-            print(f"  旧仓位总盈亏: {row['旧仓位总盈亏']:,.2f} 元")
-            print(f"  期权费变化: {row['期权费变化']:,.2f} 元")
-            print(f"  执行价变化影响: {row['执行价变化影响']:,.2f} 元")
             print(f"  Roll后总利润: {row['Roll后总利润']:,.2f} 元")
             print(f"  利润变化百分比: {row['利润变化百分比']:.2f}%")
             print(f"  旧成本价（加权平均）: {row['加权平均成本价']:.2f} 元")
@@ -392,6 +392,8 @@ class OptionsRollAnalyzer:
             print(f"  新盈利平衡价: {row['汇总新盈利平衡价']:.2f} 元")
             print(f"  旧亏损平衡价: {row['汇总旧亏损平衡价']:.2f} 元")
             print(f"  新亏损平衡价: {row['汇总新亏损平衡价']:.2f} 元")
+            print(f"  旧最大收入: {row['旧最大收入']:.2f} 元")
+            print(f"  新最大收入: {row['新最大收入']:.2f} 元")
             print()
 
         # 总体统计
@@ -408,7 +410,6 @@ class OptionsRollAnalyzer:
         print(f"旧期权费总收入: {total_old_premium:,.2f} 元")
         print(f"新期权费总收入: {total_new_premium:,.2f} 元")
         print(f"平仓总成本: {total_close_cost:,.2f} 元")
-        print(f"旧仓位总盈亏: {total_old_pnl:,.2f} 元")
         print(f"Roll后总利润: {total_roll_change:,.2f} 元")
         print(f"Roll后总体利润百分比: {overall_change_percentage:.2f}%")
         print("=" * 80)
